@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+
+# --------------------
+# tlp-switcher by nfoertl
+#   - github.com/nfoert/tlp-switcher
+# --------------------
+
+# Imports
+import sys
+import os
+import json
+import shutil
+
+import constants
+
+# Variables
+profiles = []
+
+username = os.getlogin()
+
+# Functions
+def check_config():
+    global username
+
+    if os.path.exists(f"/home/{username}/.config/tlp-switcher") == False:
+        os.mkdir(f"/home/{username}/.config/tlp-switcher")
+        os.mkdir(f"/home/{username}/.config/tlp-switcher/profiles")
+        with open(f"/home/{username}/.config/tlp-switcher/config.json", "w") as file:
+            json.dump(constants.DEFAULT_CONFIG, file)
+
+        print(f"{constants.COLOR_GREEN}{constants.SYMBOL_CHECK} Created default configs{constants.COLOR_RESET}")
+
+
+def find_profiles():
+    # TODO: Make it check for valid config folders
+
+    profiles_found = []
+
+    for folder in os.listdir(f"/home/{username}/.config/tlp-switcher/profiles"):
+        profiles_found.append(folder)
+
+    return profiles_found
+
+
+def get_config_file():
+    with open(f"/home/{username}/.config/tlp-switcher/config.json", "r") as file:
+        return json.load(file)
+
+
+def create_profile(name):
+    try:
+        os.mkdir(f"/home/{username}/.config/tlp-switcher/profiles/{name}")
+        shutil.copy(get_config_file()["tlp_conf_path"], f"/home/{username}/.config/tlp-switcher/profiles/{name}/tlp.conf")
+        
+        print(f"{constants.COLOR_GREEN}{constants.SYMBOL_CHECK} Created profile '{name}'!{constants.COLOR_RESET}")
+
+    except FileExistsError:
+        print(f"{constants.COLOR_RED}{constants.SYMBOL_X} That profile already exists! {constants.COLOR_RESET}") # TODO: Be able to replace profile
+
+
+def set_profile(profiles, name):
+    if name in profiles:
+        try:
+            shutil.copy(f"/home/{username}/.config/tlp-switcher/profiles/{name}/tlp.conf", get_config_file()["tlp_conf_path"])
+        
+            print(f"{constants.COLOR_CYAN}{constants.SYMBOL_CHECK} Switched to profile '{name}'{constants.COLOR_RESET}")
+            reload_tlp()
+
+        except PermissionError:
+            print(f"{constants.COLOR_RED}{constants.SYMBOL_X} Permission denied!{constants.COLOR_RESET}")
+
+        except Exception as e:
+            print(f"{constants.COLOR_RED}{constants.SYMBOL_X} There was a problem! '{e}'{constants.COLOR_RESET}")
+    
+    else:
+        print(f"{constants.COLOR_YELLOW}{constants.SYMBOL_WARNING} Profile not found!{constants.COLOR_RESET}")
+
+
+def reload_tlp():
+    print(f"{constants.COLOR_BLUE}{constants.SYMBOL_LOADING} Restarting tlp...{constants.COLOR_RESET}")
+
+    os.system("systemctl restart tlp")
+
+    print(f"{constants.COLOR_MAGENTA}{constants.SYMBOL_STAR} Done!{constants.COLOR_RESET}")
+
+def remove_profile(name):
+    try:
+        shutil.rmtree(f"/home/{username}/.config/tlp-switcher/profiles/{name}")
+
+        print(f"{constants.COLOR_GREEN}{constants.SYMBOL_CHECK} Profile '{name}' has been removed!{constants.COLOR_RESET}")
+
+    except FileNotFoundError:
+        print(f"{constants.COLOR_YELLOW}{constants.SYMBOL_WARNING} Profile '{name}' does not exist!{constants.COLOR_RESET}")
+
+    except Exception as e:
+        print(f"{constants.COLOR_RED}{constants.SYMBOL_X} There was a problem! '{e}'{constants.COLOR_RESET}")
+
+
+# Start script
+print(constants.MESSAGE_WELCOME)
+
+if not os.geteuid() == 0:
+    sys.exit(f"{constants.COLOR_RED}{constants.SYMBOL_X} Superuser permissions are required")
+
+check_config()
+profiles = find_profiles()
+
+# Command line arguments
+if len(sys.argv) > 1:
+    if sys.argv[1] == "list": # TODO: Change text if you have a single profile or no profiles
+        print(f"{constants.COLOR_YELLOW}You have {len(profiles)} profiles:{constants.COLOR_RESET}")
+
+        for item in range(len(profiles)):
+            print(f"    - {profiles[item]}")
+
+    elif sys.argv[1] == "add":
+        if len(sys.argv) > 1:
+            create_profile(sys.argv[2])
+
+    elif sys.argv[1] == "set":
+        if len(sys.argv) > 1:
+            set_profile(profiles, sys.argv[2])
+            
+    elif sys.argv[1] == "remove":
+        if len(sys.argv) > 1:
+            remove_profile(sys.argv[2])
+
+    elif sys.argv[1] == "help":
+        print(constants.MESSAGE_HELP)
+
+    else:
+        print(constants.MESSAGE_COMMAND_NOT_FOUND)
+        print(constants.MESSAGE_HOW_TO_HELP)
+
+else:
+    print(constants.MESSAGE_HELP)
+
+# TODO: Option for disabling welcome message
+# TODO: Option for disabling color
+
